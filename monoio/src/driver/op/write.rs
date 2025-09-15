@@ -216,12 +216,30 @@ pub(crate) struct WriteVecAt<T> {
     buf_vec: T,
 }
 
+impl<T: IoVecBuf> Op<WriteVecAt<T>> {
+    pub(crate) fn writev_at(fd: SharedFd, buf_vec: T, offset: u64) -> io::Result<Self> {
+        Op::submit_with(WriteVecAt {
+            fd,
+            buf_vec,
+            offset,
+        })
+    }
+
+    pub(crate) fn writev_at_raw(fd: &SharedFd, buf_vec: T, offset: u64) -> WriteVecAt<T> {
+        WriteVecAt {
+            fd: fd.clone(),
+            buf_vec,
+            offset,
+        }
+    }
+}
+
 #[cfg(not(windows))]
 impl<T: IoVecBuf> OpAble for WriteVecAt<T> {
     #[cfg(all(target_os = "linux", feature = "iouring"))]
     fn uring_op(&mut self) -> io_uring::squeue::Entry {
         opcode::Writev::new(
-            types::Fd(libc::AT_FDCWD),
+            types::Fd(self.fd.raw_fd()),
             self.buf_vec.read_iovec_ptr(),
             self.buf_vec.read_iovec_len() as _,
         )

@@ -4,6 +4,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle as RawFd};
 
+use monoio::io::AsyncWriteRentAt;
 use monoio::{
     buf::VecBuf,
     fs::File,
@@ -12,6 +13,7 @@ use monoio::{
 use tempfile::NamedTempFile;
 
 const HELLO: &[u8] = b"hello world...";
+const GOODBYE: &[u8] = b"goodbye world!";
 
 async fn read_hello(file: &File, offset: u64) {
     let buf = Vec::with_capacity(1024);
@@ -140,6 +142,35 @@ async fn basic_write_vectored() {
     assert!(matches!(res, Ok(len) if len == HELLO.len() * 2));
     let result = monoio::fs::read(tempfile.path()).await.unwrap();
     assert_eq!(result, [HELLO, HELLO, HELLO, HELLO].concat());
+}
+
+#[monoio::test_all]
+async fn basic_write_vectored_at() {
+    let tempfile = tempfile();
+    let mut file = File::create(tempfile.path()).await.unwrap();
+    // Test assumes HELLO and GOODBYE are of the same length.
+    assert_eq!(HELLO.len(), GOODBYE.len());
+
+    let (res, _) = file
+        .write_vectored_all_at(VecBuf::from(vec![HELLO.to_vec(); 2]), 0)
+        .await;
+    assert_eq!(res.unwrap(), HELLO.len() * 2);
+    let result = monoio::fs::read(tempfile.path()).await.unwrap();
+    assert_eq!(result, [HELLO, HELLO].concat());
+
+    let (res, _) = file
+        .write_vectored_all_at(VecBuf::from(vec![HELLO.to_vec(); 2]), HELLO.len() * 2)
+        .await;
+    assert!(matches!(res, Ok(len) if len == HELLO.len() * 2));
+    let result = monoio::fs::read(tempfile.path()).await.unwrap();
+    assert_eq!(result, [HELLO, HELLO, HELLO, HELLO].concat());
+
+    let (res, _) = file
+        .writev_at(VecBuf::from(vec![GOODBYE.to_vec(); 2]), HELLO.len() * 1)
+        .await;
+    assert!(matches!(res, Ok(len) if len == GOODBYE.len() * 2));
+    let result = monoio::fs::read(tempfile.path()).await.unwrap();
+    assert_eq!(result, [HELLO, GOODBYE, GOODBYE, HELLO].concat());
 }
 
 #[monoio::test_all]
