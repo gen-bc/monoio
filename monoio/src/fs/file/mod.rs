@@ -299,6 +299,49 @@ impl File {
         file_impl::write_vectored(self.fd.clone(), buf_vec).await
     }
 
+    /// This function attempts to write the entire contents of `buf_vec`, but the write may not
+    /// fully succeed, and it might also result in an error. The bytes will be written starting at
+    /// the specified offset.
+    ///
+    /// # Return
+    ///
+    /// The method returns the result of the operation along with the same array of buffers passed
+    /// as an argument. A return value of `0` typically indicates that the underlying file can no
+    /// longer accept bytes and likely won't be able to in the future, or that the provided buffer
+    /// is empty.
+    ///
+    /// # Errors
+    ///
+    /// Each `write` call may result in an I/O error, indicating the operation couldn't be
+    /// completed. If an error occurs, no bytes from the buffer were written to the file.
+    ///
+    /// It is **not** considered an error if the entire buffer could not be written to the file.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use monoio::io::AsyncWriteRent;
+    ///
+    /// #[monoio::main]
+    /// async fn main() -> std::io::Result<()> {
+    ///     let buf_vec = monoio::buf::VecBuf::from(vec![
+    ///         "Hello".to_owned().into_bytes(),
+    ///         "World".to_owned().into_bytes(),
+    ///     ]);
+    ///     let mut file = monoio::fs::File::create("example.txt").await?;
+    ///     let (res, buf_vec) = file.write_vectored_at(buf_vec, 0).await;
+    ///     res?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn write_vectored_at<T: IoVecBuf>(
+        &self,
+        buf_vec: T,
+        offset: u64,
+    ) -> crate::BufResult<usize, T> {
+        file_impl::write_vectored_at(self.fd.clone(), buf_vec, offset).await
+    }
+
     /// Write a buffer into this file at the specified offset, returning how
     /// many bytes were written.
     ///
@@ -428,6 +471,41 @@ impl File {
         }
 
         (Ok(()), buf)
+    }
+
+    /// Write all at a specified offset
+    pub async fn write_vectored_all_at<T: IoVecBuf>(
+        &mut self,
+        buf: T,
+        pos: usize,
+    ) -> crate::BufResult<usize, T> {
+        let mut meta = crate::buf::read_vec_meta(&buf);
+        let len = meta.len();
+        let mut written = 0;
+
+        while written < len {
+            let (res, meta_) = self.writev_at(meta, pos + written).await;
+            println!("res {:?}", res);
+            meta = meta_;
+            match res {
+                Ok(0) => {
+                    return (
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::WriteZero,
+                            "failed to write whole buffer",
+                        )),
+                        buf,
+                    )
+                }
+                Ok(n) => {
+                    written += n;
+                    meta.consume(n);
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return (Err(e), buf),
+            }
+        }
+        (Ok(written), buf)
     }
 
     /// Attempts to sync all OS-internal metadata to disk.
@@ -646,6 +724,14 @@ impl AsyncWriteRentAt for File {
         pos: usize,
     ) -> impl Future<Output = BufResult<usize, T>> {
         File::write_at(self, buf, pos as u64)
+    }
+
+    fn writev_at<T: IoVecBuf>(
+        &mut self,
+        buf: T,
+        pos: usize,
+    ) -> impl Future<Output = BufResult<usize, T>> {
+        File::write_vectored_at(self, buf, pos as u64)
     }
 }
 

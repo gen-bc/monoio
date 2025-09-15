@@ -84,6 +84,29 @@ pub trait AsyncWriteRentAt {
         buf: T,
         pos: usize,
     ) -> impl Future<Output = BufResult<usize, T>>;
+
+    /// This function attempts to write the entire contents of `buf_vec`, but the write may not
+    /// fully succeed, and it might also result in an error. The bytes will be written starting at
+    /// the specified offset.
+    ///
+    /// # Return
+    ///
+    /// The method returns the result of the operation along with the same array of buffers passed
+    /// as an argument. A return value of `0` typically indicates that the underlying file can no
+    /// longer accept bytes and likely won't be able to in the future, or that the provided buffer
+    /// is empty.
+    ///
+    /// # Errors
+    ///
+    /// Each `write` call may result in an I/O error, indicating the operation couldn't be
+    /// completed. If an error occurs, no bytes from the buffer were written to the writer.
+    ///
+    /// It is **not** considered an error if the entire buffer could not be written to this writer.
+    fn writev_at<T: IoVecBuf>(
+        &mut self,
+        buf: T,
+        pos: usize,
+    ) -> impl Future<Output = BufResult<usize, T>>;
 }
 
 impl<A: ?Sized + AsyncWriteRentAt> AsyncWriteRentAt for &mut A {
@@ -94,6 +117,14 @@ impl<A: ?Sized + AsyncWriteRentAt> AsyncWriteRentAt for &mut A {
         pos: usize,
     ) -> impl Future<Output = BufResult<usize, T>> {
         (**self).write_at(buf, pos)
+    }
+
+    fn writev_at<T: IoVecBuf>(
+        &mut self,
+        buf: T,
+        pos: usize,
+    ) -> impl Future<Output = BufResult<usize, T>> {
+        (**self).writev_at(buf, pos)
     }
 }
 

@@ -81,6 +81,7 @@ mod iouring {
     uring_op!(write<IoBuf>(write, buf));
     uring_op!(write_at<IoBuf>(write_at, buf, pos: u64));
     uring_op!(write_vectored<IoVecBuf>(writev, buf_vec));
+    uring_op!(write_vectored_at<IoVecBuf>(writev_at, buf_vec, pos: u64));
 }
 
 #[cfg(all(not(feature = "iouring"), feature = "sync"))]
