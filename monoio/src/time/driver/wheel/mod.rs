@@ -23,29 +23,31 @@ use super::EntryList;
 /// See `Timer` documentation for some implementation notes.
 #[derive(Debug)]
 pub(crate) struct Wheel {
-    /// The number of milliseconds elapsed since the wheel started.
+    /// The number of microseconds elapsed since the wheel started.
     elapsed: u64,
 
     /// Timer wheel.
     ///
     /// Levels:
     ///
-    /// * 1 ms slots / 64 ms range
-    /// * 64 ms slots / ~ 4 sec range
-    /// * ~ 4 sec slots / ~ 4 min range
-    /// * ~ 4 min slots / ~ 4 hr range
-    /// * ~ 4 hr slots / ~ 12 day range
-    /// * ~ 12 day slots / ~ 2 yr range
+    /// * 1 us slots / 64 us range
+    /// * 64 us slots / ~ 4 ms range
+    /// * ~ 4 ms slots / ~ 262 ms range
+    /// * ~ 262 ms slots / ~ 16 sec range
+    /// * ~ 16 sec slots / ~ 17 min range
+    /// * ~ 17 min slots / ~ 18 hr range
+    /// * ~ 18 hr slots / ~ 49 day range
+    /// * ~ 49 day slots / ~ 8.9 yr range
     levels: Box<[Level; NUM_LEVELS]>,
 
     /// Entries queued for firing
     pending: EntryList,
 }
 
-/// Number of levels. Each level has 64 slots. By using 6 levels with 64 slots
-/// each, the timer is able to track time up to 2 years into the future with a
-/// precision of 1 millisecond.
-const NUM_LEVELS: usize = 6;
+/// Number of levels. Each level has 64 slots. By using 8 levels with 64 slots
+/// each, the timer is able to track time up to ~8.9 years into the future with
+/// a precision of 1 microsecond.
+const NUM_LEVELS: usize = 8;
 
 /// The maximum duration of a `Sleep`
 pub(super) const MAX_DURATION: u64 = (1 << (6 * NUM_LEVELS)) - 1;
@@ -60,6 +62,8 @@ impl Wheel {
             Level::new(3),
             Level::new(4),
             Level::new(5),
+            Level::new(6),
+            Level::new(7),
         ]);
 
         Wheel {
@@ -69,7 +73,7 @@ impl Wheel {
         }
     }
 
-    /// Return the number of milliseconds that have elapsed since the timing
+    /// Return the number of microseconds that have elapsed since the timing
     /// wheel's creation.
     pub(crate) fn elapsed(&self) -> u64 {
         self.elapsed

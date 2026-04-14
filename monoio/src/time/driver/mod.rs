@@ -36,8 +36,8 @@ use crate::{
 /// or `park_timeout`. The time driver will perform no work unless `park` or
 /// `park_timeout` is called repeatedly.
 ///
-/// The driver has a resolution of one millisecond. Any unit of time that falls
-/// between milliseconds are rounded up to the next millisecond.
+/// The driver has a resolution of one microsecond. Any unit of time that falls
+/// between microseconds are rounded up to the next microsecond.
 ///
 /// When an instance is dropped, any outstanding [`Sleep`][sleep] instance that
 /// has not elapsed will be notified with an error. At this point, calling
@@ -56,16 +56,18 @@ use crate::{
 /// levels go up, the slots of the associated wheel represent larger intervals
 /// of time. At each level, the wheel has 64 slots. Each slot covers a range of
 /// time equal to the wheel at the lower level. At level zero, each slot
-/// represents one millisecond of time.
+/// represents one microsecond of time.
 ///
 /// The wheels are:
 ///
-/// * Level 0: 64 x 1 millisecond slots.
-/// * Level 1: 64 x 64 millisecond slots.
-/// * Level 2: 64 x ~4 second slots.
-/// * Level 3: 64 x ~4 minute slots.
-/// * Level 4: 64 x ~4 hour slots.
-/// * Level 5: 64 x ~12 day slots.
+/// * Level 0: 64 x 1 microsecond slots.
+/// * Level 1: 64 x 64 microsecond slots.
+/// * Level 2: 64 x ~4 millisecond slots.
+/// * Level 3: 64 x ~262 millisecond slots.
+/// * Level 4: 64 x ~16 second slots.
+/// * Level 5: 64 x ~17 minute slots.
+/// * Level 6: 64 x ~18 hour slots.
+/// * Level 7: 64 x ~49 day slots.
 ///
 /// When the timer processes entries at level zero, it will notify all the
 /// `Sleep` instances as their deadlines have been reached. For all higher
@@ -106,8 +108,8 @@ impl ClockTime {
     }
 
     pub(self) fn deadline_to_tick(&self, t: Instant) -> u64 {
-        // Round up to the end of a ms
-        self.instant_to_tick(t + Duration::from_nanos(999_999))
+        // Round up to the end of a us
+        self.instant_to_tick(t + Duration::from_nanos(999))
     }
 
     pub(self) fn instant_to_tick(&self, t: Instant) -> u64 {
@@ -115,13 +117,13 @@ impl ClockTime {
         let dur: Duration = t
             .checked_duration_since(self.start_time)
             .unwrap_or_else(|| Duration::from_secs(0));
-        let ms = dur.as_millis();
+        let us = dur.as_micros();
 
-        ms.try_into().expect("Duration too far into the future")
+        us.try_into().expect("Duration too far into the future")
     }
 
     pub(self) fn tick_to_duration(&self, t: u64) -> Duration {
-        Duration::from_millis(t)
+        Duration::from_micros(t)
     }
 
     pub(self) fn now(&self) -> u64 {
@@ -183,12 +185,9 @@ where
         match next_wake {
             Some(when) => {
                 let now = self.time_source.now();
-                // Note that we effectively round up to 1ms here - this avoids
-                // very short-duration microsecond-resolution sleeps that the OS
-                // might treat as zero-length.
                 let mut duration = self.time_source.tick_to_duration(when.saturating_sub(now));
 
-                if duration > Duration::from_millis(0) {
+                if duration > Duration::ZERO {
                     if let Some(limit) = limit {
                         duration = std::cmp::min(limit, duration);
                     }

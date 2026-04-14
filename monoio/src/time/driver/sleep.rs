@@ -15,8 +15,8 @@ use crate::time::{
 /// Waits until `deadline` is reached.
 ///
 /// No work is performed while awaiting on the sleep future to complete. `Sleep`
-/// operates at millisecond granularity and should not be used for tasks that
-/// require high-resolution timers.
+/// operates at microsecond granularity and should not be used for tasks that
+/// require sub-microsecond timers.
 ///
 /// To run something regularly on a schedule, see [`interval`].
 ///
@@ -55,13 +55,13 @@ pub fn sleep_until(deadline: Instant) -> Sleep {
 /// analog to `std::thread::sleep`.
 ///
 /// No work is performed while awaiting on the sleep future to complete. `Sleep`
-/// operates at millisecond granularity and should not be used for tasks that
-/// require high-resolution timers.
+/// operates at microsecond granularity and should not be used for tasks that
+/// require sub-microsecond timers.
 ///
 /// To run something regularly on a schedule, see [`interval`].
 ///
-/// The maximum duration for a sleep is 68719476734 milliseconds (approximately
-/// 2.2 years).
+/// The maximum duration for a sleep is 281474976710655 microseconds
+/// (approximately 8.9 years).
 ///
 /// # Cancellation
 ///
